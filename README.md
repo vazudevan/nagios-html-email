@@ -81,9 +81,9 @@ define command {
         command_name    inspect-and-host-notify-html
         command_line    /usr/bin/perl
 /usr/lib64/nagios/plugins/nagios-html-email \
-        --nagioshost http://10.230.50.130/nagios \
-        --param LOCATION="Alpharetta Nagios" \
-        --param CENTRAL="http://10.211.50.160/mntos/" \
+        --nagioshost http://IP.ADD.RE.SS/nagios \
+        --param LOCATION="BANGALORE Nagios" \
+        --param CENTRAL="http://IP.ADD.RE.SS/mntos/" \
         --param ADMIN="$ADMINEMAIL$" \
         --param NOTIFICATIONTYPE="$NOTIFICATIONTYPE$" \
         --param HOSTNAME="$HOSTNAME$" \
@@ -161,3 +161,7 @@ configuration errors that needs to be fixed by nagios admin.
 
 For use in sites with multi site nagios, URLs and location detailing have been
 included.
+
+Admin notificaiton, to fix issues based on exception matching.
+
+![admin-alert](https://github.com/vazudevan/nagios-html-email/raw/master/example-images/admin-alert.png)
