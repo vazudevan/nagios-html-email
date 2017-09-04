@@ -28,8 +28,18 @@ use warnings;
 
 use MIME::Lite;
 use URI::Escape;
+use Sys::Hostname;
 
-my $nagios_url = $ARGV[0] || die('You must pass the url to your nagios installation as the first argument');
+use Getopt::Long;
+my $nagios_url = '';
+my %NAGIOS = ();
+
+GetOptions (
+	'nagioshost=s'	=> \$nagios_url,
+	'param=s' 		=> \%NAGIOS
+) || die('You must pass the url to your nagios installation as the first argument, and other params as key=value');
+
+die('You must pass the url to your nagios installation as the first argument') if not $nagios_url;
 
 my $color_red    = '#FF8080';
 my $color_green  = '#80FF80';
@@ -56,137 +66,181 @@ my %allowed_types = (
     'RECOVERY'        => 1,
     'ACKNOWLEDGEMENT' => 1
 );
+my @exceptions = (
+	'CHECK_NRPE', 
+	'check timed out', 
+	'PLUGIN TIMEOUT', 
+	'Socket timeout', 
+	'stdout', 
+	'stderr', 
+	'out of bounds'
+	);
 
-exit if !defined($allowed_types{$ENV{NAGIOS_NOTIFICATIONTYPE}});
-my $type = $ENV{NAGIOS_SERVICEATTEMPT} ? 'service' : 'host';
+exit if !defined($allowed_types{$NAGIOS{NOTIFICATIONTYPE}});
+my $type = $NAGIOS{SERVICEATTEMPT} ? 'service' : 'host';
+
+my @skip = ();
+my $contact = $NAGIOS{CONTACTEMAIL};
+if($type eq 'service') {
+	@skip = grep { $NAGIOS{SERVICEOUTPUT} =~ /$_/; } @exceptions;
+} else {
+	@skip = grep { $NAGIOS{HOSTOUTPUT} =~ /$_/; } @exceptions;
+}
+if (scalar @skip) {
+	if ($NAGIOS{ADMIN}) {
+		$contact = $NAGIOS{ADMIN};
+	}
+	my @skip_mail = ();
+	my @recipients = split(/,/, $NAGIOS{NOTIFICATIONRECIPIENTS});
+	my $throwit = shift @recipients;
+	@skip_mail = grep { $NAGIOS{CONTACTEMAIL} =~ /$_/; } @recipients;
+	if  (scalar @skip_mail) {
+		exit 0;
+	}
+}
+# dark #c9c9c9c9;
+# light #eaeaea;
 
 my $font = 'helvetica, arial';
-my $style_th_even = '"background-color: #c9c9c9; font-weight: bold; width: 130px;"';
-my $style_th_odd  = '"background-color: #eaeaea; font-weight: bold; width: 130px;"';
-my $style_td_even = '"background-color: #c9c9c9;"';
-my $style_td_odd  = '"background-color: #eaeaea;"';
+my $style_th_even = '"background-color: #eeeeee; font-weight: bold; width: 130px;"';
+my $style_th_odd  = '"background-color: #f7f7f7; font-weight: bold; width: 130px;"';
+my $style_td_even = '"background-color: #eeeeee;"';
+my $style_td_odd  = '"background-color: #f7f7f7;"';
 my $style_table   = "\"font-family: $font; font-size: 12px;\"";
 
 my $style_state = sprintf('"background-color: %s"',
     $type eq 'service'
-    ? $colors{$ENV{NAGIOS_SERVICESTATE}}
-    : $colors{$ENV{NAGIOS_HOSTSTATE}}
+    ? $colors{$NAGIOS{SERVICESTATE}}
+    : $colors{$NAGIOS{HOSTSTATE}}
 );
 
-my $subject = sprintf('** %s %s Alert: %s is %s **',
-    $ENV{NAGIOS_NOTIFICATIONTYPE},
+my $subject = sprintf('Nagios %s Alert: %s',
     ucfirst($type),
-    $type eq 'service' ? $ENV{NAGIOS_HOSTNAME} . '/' . $ENV{NAGIOS_SERVICEDESC} : $ENV{NAGIOS_HOSTNAME},
-    $type eq 'service' ? $ENV{NAGIOS_SERVICESTATE} : $ENV{NAGIOS_HOSTSTATE}
+    $type eq 'service' ? $NAGIOS{HOSTNAME} . '/' . $NAGIOS{SERVICEDESC} : $NAGIOS{HOSTNAME},
 );
 
 my $host_url = sprintf('%s/cgi-bin/status.cgi?navbarsearch=1&host=%s',
     $nagios_url,
-    $ENV{NAGIOS_HOSTNAME}
+    $NAGIOS{HOSTNAME}
 );
 my @rows;
 my $notification_title;
+my $summary;
+my $ack_url;
+my $output;
 
 if($type eq 'service') {
     my $service_url = sprintf('%s/cgi-bin/extinfo.cgi?type=2&host=%s&service=%s',
         $nagios_url,
-        $ENV{NAGIOS_HOSTNAME},
-        uri_escape($ENV{NAGIOS_SERVICEDESC})
+        $NAGIOS{HOSTNAME},
+        uri_escape($NAGIOS{SERVICEDESC})
     );
 
     $notification_title = 'Nagios Service Notification';
-
+	$ack_url = $service_url;
+	$output = $NAGIOS{SERVICEOUTPUT};
+	$summary = "<a href=\"$service_url\">$NAGIOS{SERVICEDESC}</a> on $NAGIOS{HOSTNAME} is in 
+    <span style=$style_state>$NAGIOS{SERVICESTATE}</span> state.";
+    
     @rows = (
         {
-            'title' => 'Service State:',
-            'data'  => $ENV{NAGIOS_SERVICESTATE},
-            'style' => $style_state,
-        },
-        {
             'title' => 'Notification Type:',
-            'data'  => $ENV{NAGIOS_NOTIFICATIONTYPE},
+            'data'  => $NAGIOS{NOTIFICATIONTYPE},
         },
         {
             'title' => 'Hostname:',
-            'data'  => "<a href=\"$host_url\">$ENV{NAGIOS_HOSTNAME}</a>",
+            'data'  => "<a href=\"$host_url\">$NAGIOS{HOSTNAME}</a>",
         },
         {
             'title' => 'Service Name:',
-            'data'  => "<a href=\"$service_url\">$ENV{NAGIOS_SERVICEDESC}</a>",
+            'data'  => "<a href=\"$service_url\">$NAGIOS{SERVICEDESC}</a>",
         },
         {
-            'title' => 'Service Data:',
-            'data'  => $ENV{NAGIOS_SERVICEOUTPUT},
+            'title' => 'Service Check Type:',
+            'data'  => $NAGIOS{SERVICECHECKTYPE},
         },
         {
-            'title' => 'IP Address:',
-            'data'  => $ENV{NAGIOS_HOSTADDRESS},
-        },
-        {
-            'title' => 'Hostgroups:',
-            'data'  => $ENV{NAGIOS_HOSTGROUPNAME},
-        },
-        {
-            'title' => 'Event Time:',
-            'data'  => $ENV{NAGIOS_SHORTDATETIME},
+            'title' => 'Service Notes:',
+            'data'  => $NAGIOS{SERVICENOTES},
         },
     );
 } else {
+
     $notification_title = 'Nagios Host Notification';
+    $ack_url = $host_url;
+    $output = $NAGIOS{HOSTOUTPUT};
+    $summary = "<a href=\"$host_url\">$NAGIOS{HOSTNAME}</a> is in 
+    <span style=$style_state>$NAGIOS{HOSTSTATE}</span> state.";
 
     @rows = (
         {
-            'title' => 'Host State:',
-            'data'  => $ENV{NAGIOS_HOSTSTATE},
-            'style' => $style_state,
-        },
-        {
             'title' => 'Notification Type:',
-            'data'  => $ENV{NAGIOS_NOTIFICATIONTYPE},
+            'data'  => $NAGIOS{NOTIFICATIONTYPE},
         },
         {
             'title' => 'Hostname:',
-            'data'  => "<a href=\"$host_url\">$ENV{NAGIOS_HOSTNAME}</a>",
+            'data'  => "<a href=\"$host_url\">$NAGIOS{HOSTNAME}</a>",
         },
         {
-            'title' => 'Host Data:',
-            'data'  => $ENV{NAGIOS_HOSTOUTPUT},
-        },
-        {
-            'title' => 'IP Address:',
-            'data'  => $ENV{NAGIOS_HOSTADDRESS},
-        },
-        {
-            'title' => 'Hostgroups:',
-            'data'  => $ENV{NAGIOS_HOSTGROUPNAMES},
-        },
-        {
-            'title' => 'Event Time:',
-            'data'  => $ENV{NAGIOS_SHORTDATETIME},
+            'title' => 'Notes:',
+            'data'  => $NAGIOS{HOSTNOTES},
         },
     );
 }
 
-if($ENV{NAGIOS_NOTIFICATIONTYPE} eq 'ACKNOWLEDGEMENT') {
+push(@rows,
+	{
+		'title' => 'IP Address:',
+		'data'  => $NAGIOS{HOSTADDRESS},
+	},
+	{
+		'title' => 'Host Alias:',
+		'data'  => $NAGIOS{HOSTALIAS},
+	},
+	{
+		'title' => 'Hostgroups:',
+		'data'  => $NAGIOS{HOSTGROUPNAMES},
+	},
+	{
+		'title' => 'Event Time:',
+		'data'  => $NAGIOS{SHORTDATETIME},
+	},
+	{
+		'title' => 'Location:',
+		'data'  => $NAGIOS{LOCATION},
+	},
+);
+        
+if($NAGIOS{NOTIFICATIONTYPE} eq 'ACKNOWLEDGEMENT') {
     push(@rows,
         {
             'title' => 'Acknowledged By:',
-            'data'  => $ENV{NAGIOS_NOTIFICATIONAUTHOR},
+            'data'  => $NAGIOS{NOTIFICATIONAUTHOR},
         }
     );
     push(@rows,
         {
             'title' => 'Comment:',
-            'data'  => $ENV{NAGIOS_NOTIFICATIONCOMMENT},
+            'data'  => $NAGIOS{NOTIFICATIONCOMMENT},
         }
     );
 }
 
 # Begin the email
-my $body = "
-<body>
-<h3 style=\"font-family: $font; color: black\">$notification_title</h3>
+
+my $body = "<body>
+<div style=\"display: block;\"><p>$summary</p>
+<p style=\"font-family: monospace; font-size: 12px;\">$output</p><br></div>
+<ul><li><a href=\"$nagios_url\">$NAGIOS{LOCATION}</a></li>
+<li><a href=\"$NAGIOS{CENTRAL}\">Central Dashboard</a> - all locations</li>";
+
+if ( $NAGIOS{NOTIFICATIONTYPE} == 'PROBLEM' ) {
+	$body .= "<li><a href=\"$ack_url\">Acknowledge Alert</a> - acknowledge this</li>";
+}
+
+$body .= "</ul><hr><h5>Other information:</h5>
 <table border=\"0\" cellpadding=\"4\" cellspacing=\"2\" style=$style_table>";
+
 
 # Add the rows to the email
 for(my $i=0; $i<@rows; $i++) {
@@ -197,13 +251,29 @@ for(my $i=0; $i<@rows; $i++) {
         $rows[$i]->{'data'}
     );
 }
-$body .= '</table></body>';
+$body .= "</table><br>
+<br>
+<cite style="font-family: helvetica, arial; font-size: 11px;">This notification is 
+automatically sent by Infrastructure Instance of Nagios Monitoring, please reach out to 
+<a href="mailto:$NAGIOS{ADMIN}?Subject=Regarding%20Nagios%20Notification">Nagios Admin</a>,
+ for any corrections, comments, or concern related to this notification</cite>
+</body>";
+
+#NOTIFICATIONRECIPIENTS
+if (scalar @skip) {
+	$subject = 'Nagios Admin Alert';
+}
 
 my $msg = MIME::Lite->new(
-    To      => $ENV{NAGIOS_CONTACTEMAIL},
+    To      => $contact,
     Subject => $subject,
     Type    =>'multipart/related'
 );
+
+my $from = $NAGIOS{LOCATION} ? $NAGIOS{LOCATION} . ' <nagios@' . hostname . 'localhost.localdomain>' : '';
+if ($from) {
+	$msg->add("From" => $from);
+}
 
 $msg->attach(Type => 'text/html', Data => $body);
 $msg->send();
