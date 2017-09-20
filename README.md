@@ -74,6 +74,7 @@ define command {
         --param SHORTDATETIME="$SHORTDATETIME$" \
         --param CONTACTEMAIL="$CONTACTEMAIL$" \
         --param NOTIFICATIONRECIPIENTS="$NOTIFICATIONRECIPIENTS$" \
+        --param SERVICEDURATION="$SERVICEDURATION$" \
 
 }
 
@@ -96,6 +97,7 @@ define command {
         --param SHORTDATETIME="$SHORTDATETIME$" \
         --param CONTACTEMAIL="$CONTACTEMAIL$" \
         --param NOTIFICATIONRECIPIENTS="$NOTIFICATIONRECIPIENTS$" \
+        --param HOSTDURATION="$HOSTDURATION$" \
 
 }
 
@@ -137,14 +139,19 @@ recipient.
 
 ```
 my @exceptions = (
-        'CHECK_NRPE', 
-        'check timed out', 
-        'PLUGIN TIMEOUT', 
-        'Socket timeout', 
-        'stdout', 
-        'stderr', 
-        'out of bounds'
-        );
+	'CHECK_NRPE', 
+	'check timed out', 
+	'PLUGIN TIMEOUT', 
+    'plugin timed out',
+	'Socket timeout', 
+	'stdout', 
+	'stderr', 
+	'out of bounds',
+    'Error connecting to server',
+    'Unknown error',
+    'Authentication Error',
+    'Cannot complete login',
+);
 ```
 
 Changes from Original:
