@@ -70,11 +70,16 @@ my @exceptions = (
 	'CHECK_NRPE', 
 	'check timed out', 
 	'PLUGIN TIMEOUT', 
+    'plugin timed out',
 	'Socket timeout', 
 	'stdout', 
 	'stderr', 
-	'out of bounds'
-	);
+	'out of bounds',
+    'Error connecting to server',
+    'Unknown error',
+    'Authentication Error',
+    'Cannot complete login',
+);
 
 exit if !defined($allowed_types{$NAGIOS{NOTIFICATIONTYPE}});
 my $type = $NAGIOS{SERVICEATTEMPT} ? 'service' : 'host';
@@ -82,9 +87,9 @@ my $type = $NAGIOS{SERVICEATTEMPT} ? 'service' : 'host';
 my @skip = ();
 my $contact = $NAGIOS{CONTACTEMAIL};
 if($type eq 'service') {
-	@skip = grep { $NAGIOS{SERVICEOUTPUT} =~ /$_/; } @exceptions;
+	@skip = grep { $NAGIOS{SERVICEOUTPUT} =~ /$_/i; } @exceptions;
 } else {
-	@skip = grep { $NAGIOS{HOSTOUTPUT} =~ /$_/; } @exceptions;
+	@skip = grep { $NAGIOS{HOSTOUTPUT} =~ /$_/i; } @exceptions;
 }
 if (scalar @skip) {
 	if ($NAGIOS{ADMIN}) {
@@ -163,6 +168,10 @@ if($type eq 'service') {
             'title' => 'Service Notes:',
             'data'  => $NAGIOS{SERVICENOTES},
         },
+        {
+            'title' => 'State since:',
+            'data'  => $NAGIOS{SERVICEDURATION},
+        },
     );
 } else {
 
@@ -184,6 +193,10 @@ if($type eq 'service') {
         {
             'title' => 'Notes:',
             'data'  => $NAGIOS{HOSTNOTES},
+        },
+        {
+            'title' => 'State Since:',
+            'data'  => $NAGIOS{HOSTDURATION},
         },
     );
 }
@@ -251,7 +264,9 @@ for(my $i=0; $i<@rows; $i++) {
         $rows[$i]->{'data'}
     );
 }
-$body .= "</table><br>
+$body .= "</table>
+<p>This notification has been marked to $NAGIOS{NOTIFICATIONRECIPIENTS} </p>
+<br>
 <br>
 <cite style="font-family: helvetica, arial; font-size: 11px;">This notification is 
 automatically sent by Infrastructure Instance of Nagios Monitoring, please reach out to 
