@@ -139,19 +139,19 @@ recipient.
 
 ```
 my @exceptions = (
-	'CHECK_NRPE', 
-	'check timed out', 
-	'PLUGIN TIMEOUT', 
-    'plugin timed out',
-	'Socket timeout', 
-	'stdout', 
-	'stderr', 
-	'out of bounds',
-    'Error connecting to server',
-    'Unknown error',
-    'Authentication Error',
-    'Cannot complete login',
-);
+        'CHECK_NRPE', 
+        'check timed out', 
+        'PLUGIN TIMEOUT', 
+        'plugin timed out',
+        'Socket timeout', 
+        'stdout', 
+        'stderr', 
+        'out of bounds',
+        'Error connecting to server',
+        'Unknown error',
+        'Authentication Error',
+        'Cannot complete login',
+        );
 ```
 
 Changes from Original:
