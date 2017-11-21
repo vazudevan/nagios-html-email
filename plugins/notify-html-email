@@ -26,6 +26,7 @@
 use strict;
 use warnings;
 
+use Digest::MD5 qw(md5_hex);
 use MIME::Lite;
 use URI::Escape;
 use Sys::Hostname;
@@ -33,7 +34,8 @@ use Sys::Hostname;
 use Getopt::Long;
 my $nagios_url = '';
 my %NAGIOS = ();
-
+my $subject;
+ 
 GetOptions (
 	'nagioshost=s'	=> \$nagios_url,
 	'param=s' 		=> \%NAGIOS
@@ -119,10 +121,20 @@ my $style_state = sprintf('"background-color: %s"',
     : $colors{$NAGIOS{HOSTSTATE}}
 );
 
-my $subject = sprintf('Nagios %s Alert: %s',
-    ucfirst($type),
-    $type eq 'service' ? $NAGIOS{HOSTNAME} . '/' . $NAGIOS{SERVICEDESC} : $NAGIOS{HOSTNAME},
-);
+if (defined($NAGIOS{SUBJECT})) {
+    $subject = sprintf('** %s %s Alert: %s is %s **',
+        $NAGIOS{NOTIFICATIONTYPE},
+        ucfirst($type),
+        $type eq 'service' ? $NAGIOS{HOSTNAME} . '/' . $NAGIOS{SERVICEDESC} : $NAGIOS{HOSTNAME},
+        $type eq 'service' ? $NAGIOS{SERVICESTATE} : $NAGIOS{HOSTSTATE}
+    );
+    
+} else {
+    $subject = sprintf('Nagios %s Alert: %s',
+        ucfirst($type),
+        $type eq 'service' ? $NAGIOS{HOSTNAME} . '/' . $NAGIOS{SERVICEDESC} : $NAGIOS{HOSTNAME},
+    );
+}
 
 my $host_url = sprintf('%s/cgi-bin/status.cgi?navbarsearch=1&host=%s',
     $nagios_url,
@@ -133,6 +145,11 @@ my $notification_title;
 my $summary;
 my $ack_url;
 my $output;
+my $hostid;
+my $serviceid;
+
+
+$hostid = md5_hex($NAGIOS{HOSTNAME});
 
 if($type eq 'service') {
     my $service_url = sprintf('%s/cgi-bin/extinfo.cgi?type=2&host=%s&service=%s',
@@ -141,6 +158,7 @@ if($type eq 'service') {
         uri_escape($NAGIOS{SERVICEDESC})
     );
 
+	$serviceid = md5_hex($NAGIOS{SERVICEDESC});
     $notification_title = 'Nagios Service Notification';
 	$ack_url = $service_url;
 	$output = $NAGIOS{SERVICEOUTPUT};
@@ -264,13 +282,14 @@ for(my $i=0; $i<@rows; $i++) {
         $rows[$i]->{'data'}
     );
 }
-$body .= "</table>
-<p>This notification has been marked to $NAGIOS{NOTIFICATIONRECIPIENTS} </p>
+$body .= "
+</table><br>
+<p style=\"font-family: helvetica, arial; font-size: 12px;\">
+This notification has been marked to $NAGIOS{NOTIFICATIONRECIPIENTS} </p>
 <br>
-<br>
-<cite style="font-family: helvetica, arial; font-size: 11px;">This notification is 
+<cite style=\"font-family: helvetica, arial; font-size: 11px;\">This notification is 
 automatically sent by Infrastructure Instance of Nagios Monitoring, please reach out to 
-<a href="mailto:$NAGIOS{ADMIN}?Subject=Regarding%20Nagios%20Notification">Nagios Admin</a>,
+<a href=\"mailto:$NAGIOS{ADMIN}?Subject=Regarding%20Nagios%20Notification\">Nagios Admin</a>,
  for any corrections, comments, or concern related to this notification</cite>
 </body>";
 
@@ -279,9 +298,17 @@ if (scalar @skip) {
 	$subject = 'Nagios Admin Alert';
 }
 
+my $stamp = substr(md5_hex($NAGIOS{SHORTDATETIME}),1,6);
+my $messageid = '<NAGIOS.' . $hostid . '.' . $stamp . '@Alert.Nagios>';
+my $reference = '<NAGIOS.' . $hostid . '@Alert.Nagios>' ;
+if($type eq 'service') {
+	$reference .= ' ' . '<NAGIOS.' . $hostid . substr($serviceid,1,10) . '@Alert.Nagios>' ;
+}
 my $msg = MIME::Lite->new(
     To      => $contact,
     Subject => $subject,
+	'Message-ID' => $messageid,
+	References => $reference,
     Type    =>'multipart/related'
 );
 
